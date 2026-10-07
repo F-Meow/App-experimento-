@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi rutina</title>
+<meta name="theme-color" content="#FFC27A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  /* Cada torta tiene su paleta */
+  :root, body[data-tema="AM"] {          /* MAÑANA: amarillos pálidos, naranjas claros, rosas pastel */
+    --fondo: #FFF3D6; --lienzo: #FFFDF5; --tinta: #4A2B3D;
+    --acento: #FFC27A; --acento2: #FFE08A; --peligro: #FF9EB5;
+  }
+  body[data-tema="PM"] {                 /* TARDE: naranja tostada, terracota, tonos de atardecer */
+    --fondo: #F7D3B2; --lienzo: #FFF3E6; --tinta: #3A1E1B;
+    --acento: #E8833A; --acento2: #F2A65A; --peligro: #D9644A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--fondo); color: var(--tinta);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 16px; position: relative; overflow-x: hidden;
+    transition: background-color .5s ease, color .5s ease;
+    user-select: none; -webkit-user-select: none;
+  }
+  h1 { margin: 0 0 4px; font-size: 2rem; }
+  .sub { margin: 0 0 12px; font-weight: 600; opacity: .7; }
+
+  /* Decoración Memphis, detrás de todo: una por torta, se funden al cambiar */
+  .decos { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; transition: opacity .5s ease; }
+  .decos > * { position: absolute; }
+  body[data-tema="AM"] .decos.pm, body[data-tema="PM"] .decos.am { opacity: 0; }
+
+  /* AM: sol suave, rosas y naranjas pastel */
+  .am .sol   { top: -70px; left: -70px; width: 230px; height: 230px; border-radius: 50%; background: #FFE08A; box-shadow: 0 0 0 24px #FFEDB8; }
+  .am .rosa  { bottom: 40px; right: -50px; width: 150px; height: 150px; border-radius: 50%; background: #FFC9D8; }
+  .am .tri   { top: 280px; right: -30px; width: 110px; height: 110px; background: #FFD2A8; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .am .aro   { top: 100px; right: 60px; width: 42px; height: 42px; border-radius: 50%; border: 7px solid #FFB6C8; }
+  .am svg    { bottom: 130px; left: 24px; width: 90px; height: 90px; }
+
+  /* PM: sol poniente con anillos, terracota y atardecer */
+  .pm .sol   { bottom: -100px; left: -80px; width: 260px; height: 260px; border-radius: 50%; background: #E8833A; box-shadow: 0 0 0 26px #F0A268, 0 0 0 52px #F4BE92; }
+  .pm .aro   { top: 70px; right: -30px; width: 130px; height: 130px; border-radius: 50%; border: 14px solid #C65D3B; }
+  .pm .tri   { top: 320px; left: -30px; width: 110px; height: 110px; background: #7A4B7C; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .pm .punto { bottom: 160px; right: 50px; width: 26px; height: 26px; border-radius: 50%; background: #D9486B; }
+  .pm svg    { bottom: 60px; right: 24px; width: 90px; height: 90px; }
+
+  main { position: relative; z-index: 1; width: 100%; max-width: 480px; }
+  svg#reloj { width: 100%; height: auto; display: block; touch-action: manipulation; }
+
+  /* Porción: crece y engruesa su contorno al señalarla */
+  .sector { cursor: pointer; outline: none; transform-box: view-box; transform-origin: 200px 200px;
+            /* Modo MOD: cada porción se aleja del centro (solo estético). "translate" es independiente del efecto de agrandar */
+            translate: calc(var(--ux, 0) * var(--sep, 0px)) calc(var(--uy, 0) * var(--sep, 0px));
+            transition: transform .18s ease, translate .7s ease; }
+  body.mod-on { --sep: 12px; --crece: 1.0857; --crece-centro: 2; --signo: 1; }   /* 1.0857 = (140 + 12) / 140: el fondo crece lo mismo que se separan */
+  /* Números y marcas de las horas se desplazan hacia afuera junto con el círculo */
+  .marca { translate: calc(var(--ux, 0) * var(--sep, 0px)) calc(var(--uy, 0) * var(--sep, 0px)); transition: translate .7s ease, opacity .3s ease; }
+  body.zoom .marca { opacity: 0; }   /* con el zoom, los números se ocultan para no tapar los botones */
+  /* El círculo de fondo crece junto con la separación (mismo tiempo y ritmo) */
+  .fondo { transform-box: view-box; transform-origin: 200px 200px; transform: scale(var(--crece, 1)); transition: transform .7s ease; }
+  /* El punto del centro crece más (x2) para que se note; mismo tiempo y ritmo que el fondo */
+  /* Centro interactivo (solo con MOD activo): crece al pasar el mouse; con doble clic sostenido el + se vuelve flecha */
+  .gc, .gc * { pointer-events: none; }
+  .gc .centro { pointer-events: all; cursor: pointer; }
+  /* Sin MOD: al pasar el mouse por el centro, crece poco a poco y aparece una X (doble clic = borrar todo) */
+  .x-centro { transform-box: view-box; transform-origin: 200px 200px; transform: scale(0); transition: transform .5s ease; }
+  body:not(.mod-on) .gc:hover .centro { transform: scale(2); }
+  body:not(.mod-on) .gc:hover .x-centro { transform: scale(1); }
+  .gc { transform-box: view-box; transform-origin: 200px 200px; transition: transform .18s ease; touch-action: none; }
+  body.mod-on .gc:hover { transform: scale(1.3); }
+  .flecha-centro { transform-box: view-box; transform-origin: 200px 200px; transform: scale(var(--flecha, 0)); transition: transform .2s ease; }
+  body.apuntando { --signo: 0; --flecha: 1; }
+  body.apuntando .signo-centro { transition-duration: .2s; }
+
+  /* La torta tiembla si no hay espacio para otra actividad */
+  @keyframes temblor {
+    0%, 100% { transform: translateX(0); }
+    10% { transform: translateX(-12px); } 20% { transform: translateX(12px); }
+    30% { transform: translateX(-12px); } 40% { transform: translateX(12px); }
+    50% { transform: translateX(-9px); }  60% { transform: translateX(9px); }
+    70% { transform: translateX(-5px); }  80% { transform: translateX(5px); }
+    90% { transform: translateX(-2px); }
+  }
+  svg#reloj.tiembla { animation: temblor 1s ease-in-out; }
+
+  /* Letrero neutro sobre la torta: cuánto falta para que acabe la actividad actual y cuál sigue */
+  #letrero { margin: 0 0 14px; padding: 12px 18px; background: #1d1b1e; color: #FFF6E8; text-align: center;
+             border-radius: 18px; box-shadow: 5px 5px 0 var(--acento); line-height: 1.35; }
+  #letrero b { font-weight: 800; }
+  #letrero .l1 { font-size: 1.02rem; }
+  #letrero .l2 { margin-top: 8px; padding-top: 8px; border-top: 2px solid rgba(255, 246, 232, .25); font-size: .95rem; opacity: .9; }
+  #letrero .l2:empty { display: none; }
+
+  /* Botones que aparecen sobre la pared exterior al hacer zoom a una actividad */
+  .btn-zoom { cursor: pointer; }
+  .btn-zoom .pop { transform-box: fill-box; transform-origin: center; animation: aparece .3s ease .45s both; }
+  @keyframes aparece { from { transform: scale(0); } to { transform: scale(1); } }
+  .btn-zoom circle { fill: var(--acento); stroke: var(--tinta); stroke-width: 2.5; transition: stroke-width .15s; }
+  .btn-zoom.peligro circle { fill: var(--peligro); }
+  .btn-zoom:hover circle { stroke-width: 4; }
+  .btn-zoom text { font-size: 15px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  #dialogo .emojis { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  #dialogo .emojis button { background: var(--fondo); padding: 2px 6px; font-size: 1.2rem; }
+
+  /* Menú para nombrar la nueva actividad */
+  #dialogo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(40, 20, 30, .35); }
+  #dialogo[hidden] { display: none; }
+  #dialogo .caja { background: var(--lienzo); border: 3px solid var(--tinta); border-radius: 24px; padding: 18px 20px;
+                   box-shadow: 6px 6px 0 var(--tinta); width: min(340px, 90vw); max-height: 90vh; overflow-y: auto; }
+  #dialogo input { width: 100%; font: inherit; padding: 8px 12px; border: 2px solid var(--tinta); border-radius: 12px;
+                   background: var(--fondo); color: var(--tinta); margin: 6px 0 12px; }
+  #dialogo .btns { display: flex; gap: 8px; justify-content: flex-end; }
+  #dialogo button { font: inherit; font-weight: 700; cursor: pointer; border: 2px solid var(--tinta); border-radius: 12px;
+                    padding: 6px 14px; color: var(--tinta); background: var(--acento2); }
+  #dialogo #dNo { background: transparent; }
+  #dialogo p { margin: 6px 0 14px; line-height: 1.4; }
+  #dialogo .colores { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 14px; }
+  #dialogo .colores button.sw { width: 28px; height: 28px; border-radius: 50%; padding: 0; border: 2px solid var(--tinta); }
+  #dialogo .colores button.sw.sel { outline: 3px solid var(--tinta); outline-offset: 2px; }
+  #dialogo input[type=color] { width: 34px; height: 30px; padding: 0; margin: 0; border: 2px solid var(--tinta); border-radius: 8px; background: none; cursor: pointer; }
+  #dialogo #dOk.peligro { background: var(--peligro); }
+
+  /* Signo + en el centro: crece desde cero junto con el punto y desaparece al desactivar MOD */
+  .signo-centro { transform-box: view-box; transform-origin: 200px 200px; transform: scale(var(--signo, 0)); transition: transform .7s ease; }
+  .centro { transform-box: view-box; transform-origin: 200px 200px; transform: scale(var(--crece-centro, 1)); transition: transform .7s ease; }
+  .sector path { stroke: var(--tinta); stroke-width: 3; stroke-linejoin: round; transition: stroke-width .18s ease; }
+  .sector:hover, .sector:focus-visible, .sector.activo { transform: scale(1.07); }
+  .sector:hover path, .sector:focus-visible path, .sector.activo path { stroke-width: 6; }
+
+  /* Asas para ajustar la duración (solo en modo edición) */
+  .asa { display: none; cursor: grab; touch-action: none; fill: var(--lienzo); stroke: var(--tinta); stroke-width: 4; }
+  .asa:active { cursor: grabbing; }
+  .sector.editando .asa { display: block; }
+
+  /* Flecha para cambiar de torta: aparece al acercar el mouse al borde izquierdo */
+  svg#reloj { transition: opacity .18s ease; }
+  #flecha {
+    position: fixed; left: 14px; top: 50%; transform: translateY(-50%); z-index: 5;
+    width: 56px; height: 56px; border-radius: 50%; padding: 0;
+    border: 3px solid var(--tinta); background: var(--acento); color: var(--tinta);
+    font: 800 1.8rem/1 "Trebuchet MS", "Segoe UI", sans-serif;
+    box-shadow: 4px 4px 0 var(--tinta); cursor: pointer;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .15s ease;
+  }
+  #flecha:hover { opacity: 1 !important; transform: translateY(-50%) scale(1.08); }
+  #flecha:focus-visible { opacity: 1; pointer-events: auto; }
+  @media (hover: none) { #flecha { opacity: .75 !important; pointer-events: auto !important; } }
+
+  /* Botones de actividad Bitorta: (+) en modo MOD, (>) / (<) al pasar el mouse */
+  .mas, .puente, .menos { display: none; cursor: pointer; }
+  .mas circle, .puente circle, .menos circle { fill: var(--acento); stroke: var(--tinta); stroke-width: 3; }
+  .mas text, .puente text, .menos text { fill: var(--tinta); font: 800 16px "Trebuchet MS", "Segoe UI", sans-serif;
+                            text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  body.mod-on .sector.puede-bi .mas { display: block; }
+  body.mod-on .sector.bi:hover .menos, body.mod-on .sector.bi.activo .menos { display: block; }
+  .sector.bi:hover .puente, .sector.bi.activo .puente, .sector.bi:focus-visible .puente { display: block; }
+  .fila .sep { background: var(--acento2); }
+  #reset { margin-top: 12px; background: transparent !important; font-size: .85rem; font-weight: 600; }
+
+  /* Botón MOD y panel de modificación */
+  .encabezado { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .encabezado h1 { margin: 0; }
+  #btnMod {
+    font: inherit; font-weight: 800; letter-spacing: .05em; cursor: pointer;
+    padding: 8px 18px; border: 3px solid var(--tinta); border-radius: 999px;
+    background: var(--acento); color: var(--tinta); box-shadow: 3px 3px 0 var(--tinta);
+  }
+  #btnMod.on { background: var(--tinta); color: #fff; }
+  #mod { margin-top: 18px; background: var(--lienzo); border: 3px solid var(--tinta); border-radius: 24px;
+         padding: 16px 18px; box-shadow: 6px 6px 0 var(--tinta); }
+  #mod[hidden] { display: none; }
+  #mod input { user-select: text; -webkit-user-select: text; font: inherit; padding: 6px 10px;
+               border: 2px solid var(--tinta); border-radius: 12px; background: var(--fondo); color: var(--tinta); min-width: 0; }
+  #mod button { font: inherit; font-weight: 700; cursor: pointer; border: 2px solid var(--tinta);
+                border-radius: 12px; background: var(--acento2); color: var(--tinta); padding: 6px 12px; }
+  .mod-titulo { font-weight: 800; margin: 4px 0 8px; }
+  .fila { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .fila input { flex: 1; }
+  .fila .pt { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--tinta); flex: none; }
+  .fila button { background: var(--peligro); padding: 4px 10px; }
+  .nueva { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .nueva > input[type=text] { flex: 1 1 100%; }
+  .nueva label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  #mod .msg { margin-top: 8px; font-size: .9rem; min-height: 1.2em; }
+  input { user-select: text; -webkit-user-select: text; }
+
+  /* Detalles de la actividad (texto simple, sin recuadro) */
+  #detalle { text-align: center; margin-top: 14px; min-height: 84px; }
+  #detalle .nombre { font-size: 1.35rem; font-weight: 700; }
+  #detalle .hora { font-size: 1.05rem; margin-top: 2px; }
+  #detalle .resumen { font-size: .95rem; opacity: .8; margin-top: 2px; }
+  #detalle .ayuda { font-size: .85rem; opacity: .65; margin-top: 6px; }
+</style>
+</head>
+<body data-tema="AM">
+  <div class="decos am">
+    <div class="sol"></div><div class="rosa"></div><div class="tri"></div><div class="aro"></div>
+    <svg viewBox="0 0 80 80"><path d="M5 40 Q20 10 35 40 T65 40 T95 40" fill="none" stroke="#FFB37A" stroke-width="10" stroke-linecap="round"/></svg>
+  </div>
+  <div class="decos pm">
+    <div class="sol"></div><div class="aro"></div><div class="tri"></div><div class="punto"></div>
+    <svg viewBox="0 0 80 80"><path d="M5 40 Q20 10 35 40 T65 40 T95 40" fill="none" stroke="#E0566B" stroke-width="10" stroke-linecap="round"/></svg>
+  </div>
+
+  <button id="flecha" type="button" aria-label="Ir a la torta PM">&gt;</button>
+
+  <main>
+    <div class="encabezado"><h1>Mi rutina</h1><button id="btnMod" type="button" aria-pressed="false">MOD</button></div>
+    <p class="sub" id="sub">Torta AM</p>
+    <div id="letrero" aria-live="polite"><div class="l1"></div><div class="l2"></div></div>
+    <svg id="reloj" viewBox="0 0 400 400" role="img" aria-label="Reloj de actividades AM"></svg>
+    <div id="detalle"></div>
+  </main>
+
+  <div id="dialogo" hidden>
+    <div class="caja">
+      <div class="mod-titulo" id="dTitulo">Nueva actividad</div>
+      <p id="dTexto" hidden></p>
+      <div id="dIconoBox" hidden>
+        <div class="mod-titulo">Emoji</div>
+        <input id="dIcono" type="text" maxlength="8" placeholder="Escribe o elige un emoji">
+        <div class="emojis" id="dEmojis"></div>
+      </div>
+      <div class="mod-titulo" id="dNombreT" hidden>Nombre</div>
+      <input id="dNombre" type="text" maxlength="30" placeholder="Nombre de la actividad">
+      <div id="dResumenBox" hidden>
+        <div class="mod-titulo">Resumen</div>
+        <input id="dResumen" type="text" maxlength="120" placeholder="Una frase corta que resuma la actividad">
+      </div>
+      <div id="dColorBox" hidden>
+        <div class="mod-titulo">Color</div>
+        <div class="colores" id="dColores"></div>
+      </div>
+      <div class="btns"><button id="dNo" type="button">Cancelar</button><button id="dOk" type="button">Crear</button></div>
+    </div>
+  </div>
+
+<script>
+  // ====== TUS ACTIVIDADES (edítalas aquí) ======
+  // Cada torta tiene 12 horas, contadas desde el 0 (arriba).
+  // AM: 0 = 12:00 AM (medianoche), 6 = 6:00 AM, 12 = 12:00 PM.
+  // PM: 0 = 12:00 PM (mediodía),   3 = 3:00 PM,  12 = 12:00 AM.
+  // Usa decimales para los minutos: 8.5 = 8:30
+  // Una actividad que aparece en las dos tortas (Bitorta) comparte el mismo "id".
+  const datos = {
+    AM: [
+      { id: "dormir",   nombre: "Dormir",                inicio: 0,   fin: 5,   color: "#FFE29A", icono: "😴" },
+      { id: "am-desp",  nombre: "Despertar y desayunar", inicio: 6,   fin: 7.5, color: "#FFC58F", icono: "🍳" },
+      { id: "am-ejer",  nombre: "Ejercicio",             inicio: 7.5, fin: 8.5, color: "#FFA9B8", icono: "🏃" },
+      { id: "am-estu",  nombre: "Estudiar",              inicio: 9,   fin: 11,  color: "#FFD36E", icono: "📚" },
+      { id: "am-paus",  nombre: "Pausa activa",          inicio: 11,  fin: 12,  color: "#F9B8D6", icono: "🧘" },
+    ],
+    PM: [
+      { id: "pm-almu",  nombre: "Almuerzo",               inicio: 0,   fin: 1,   color: "#E8833A", icono: "🍽️" },
+      { id: "pm-proy",  nombre: "Proyectos",              inicio: 1.5, fin: 5,   color: "#C65D3B", icono: "💻" },
+      { id: "pm-libre", nombre: "Tiempo libre",           inicio: 6,   fin: 7,   color: "#F2A65A", icono: "🎮" },
+      { id: "pm-cena",  nombre: "Cena",                   inicio: 7.5, fin: 8.5, color: "#E0566B", icono: "🥘" },
+      { id: "pm-prep",  nombre: "Prepararse para dormir", inicio: 9,   fin: 10,  color: "#7A4B7C", icono: "🌙" },
+      { id: "dormir",   nombre: "Dormir",                 inicio: 10,  fin: 12,  color: "#FFE29A", icono: "😴" },
+    ],
+  };
+  // =============================================
+  // Los cambios se guardan en el navegador. Estos ejemplos solo se usan la primera vez
+  // (o con el botón "Restablecer" del panel MOD).
+  const CLAVE = "rutina-v1";
+  try {
+    const g = JSON.parse(localStorage.getItem(CLAVE));
+    const ok = l => Array.isArray(l) && l.every(a => a && typeof a.inicio === "number" && typeof a.fin === "number" && a.id);
+    if (g && ok(g.AM) && ok(g.PM)) { datos.AM = g.AM; datos.PM = g.PM; }
+  } catch (e) {}
+  function guardar() {
+    try {
+      const f = l => l.map(({ id, nombre, inicio, fin, color, icono, resumen }) => ({ id, nombre, inicio, fin, color, icono, resumen }));
+      localStorage.setItem(CLAVE, JSON.stringify({ AM: f(datos.AM), PM: f(datos.PM) }));
+    } catch (e) {}
+    actualizarLetrero();
+  }
+  const nuevoId = () => "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  let periodo = "AM";
+  let actividades = datos.AM;
+
+  const CX = 200, CY = 200, R = 140;
+  const PASO = 1 / 12;      // se ajusta de 5 en 5 minutos
+  const MINIMO = 0.25;      // duración mínima: 15 minutos
+  const svg = document.getElementById("reloj");
+  const detalle = document.getElementById("detalle");
+  const NS = "http://www.w3.org/2000/svg";
+  const TINTA = "var(--tinta)";
+
+  const punto = (h, r) => {
+    const a = (h / 12) * 2 * Math.PI;
+    return [CX + r * Math.sin(a), CY - r * Math.cos(a)];
+  };
+  const el = (tag, attrs, padre = svg) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) {
+      const v = attrs[k];
+      if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v);   // colores de la paleta
+      else e.setAttribute(k, v);
+    }
+    padre.appendChild(e);
+    return e;
+  };
+  const fmt = h => {
+    const hh = Math.floor(h + 1e-9), mm = Math.round((h - hh) * 60);
+    const suf = hh >= 12 ? (periodo === "AM" ? "PM" : "AM") : periodo;   // el borde final cambia de AM/PM
+    return (hh % 12 === 0 ? 12 : hh % 12) + ":" + String(mm).padStart(2, "0") + " " + suf;
+  };
+  const durTxt = d => {
+    const t = Math.round(d * 60), h = Math.floor(t / 60), m = t % 60;
+    return ((h ? h + " h " : "") + (m ? m + " min" : "")).trim();
+  };
+  const limitar = (v, a, b) => Math.min(Math.max(v, a), b);
+
+  // Fondo del reloj (las zonas blancas son tiempo libre)
+  const fondo = el("circle", { class: "fondo", cx: CX, cy: CY, r: R, fill: "var(--lienzo)", stroke: TINTA, "stroke-width": 3 });
+
+  const capa = el("g", {});
+  let seleccionado = null;   // actividad seleccionada
+  let editando = null;       // actividad en modo edición
+
+  const alFrente = a => { if (capa.lastChild !== a.g) capa.appendChild(a.g); };
+
+  // ---- Detalles ----
+  function esc(t) { return String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function mostrarDetalle(a) {
+    if (!a) {
+      detalle.innerHTML = `<div class="ayuda">Toca una actividad para ver sus detalles · doble clic en un espacio libre para crear una</div>`;
+      return;
+    }
+    const ayuda = editando === a
+      ? "Arrastra los puntos blancos para cambiar la duración"
+      : "Doble clic para ajustar la duración";
+    detalle.innerHTML =
+      `<div class="nombre">${a.icono} ${a.nombre}</div>
+       ${a.resumen ? `<div class="resumen">${esc(a.resumen)}</div>` : ""}
+       <div class="hora">${fmt(a.inicio)} → ${fmt(a.fin)} · ${durTxt(a.fin - a.inicio)}</div>
+       ${enlaceTxt(a)}
+       <div class="ayuda">${ayuda}</div>`;
+  }
+
+  // ---- Dibujo de una porción (se vuelve a llamar al modificarla) ----
+  function dibujar(a) {
+    // Dirección en la que se aleja la porción en modo MOD (hacia la mitad de su arco)
+    const ang = ((a.inicio + a.fin) / 24) * 2 * Math.PI;
+    a.g.style.setProperty("--ux", Math.sin(ang).toFixed(4));
+    a.g.style.setProperty("--uy", (-Math.cos(ang)).toFixed(4));
+    const [x1, y1] = punto(a.inicio, R);
+    const [x2, y2] = punto(a.fin, R);
+    const grande = (a.fin - a.inicio) > 6 ? 1 : 0;
+    a.path.setAttribute("d", `M ${CX} ${CY} L ${x1} ${y1} A ${R} ${R} 0 ${grande} 1 ${x2} ${y2} Z`);
+    const [ix, iy] = punto((a.inicio + a.fin) / 2, R * 0.65);
+    a.icon.setAttribute("x", ix); a.icon.setAttribute("y", iy);
+    a.asaIni.setAttribute("cx", x1); a.asaIni.setAttribute("cy", y1);
+    a.asaFin.setAttribute("cx", x2); a.asaFin.setAttribute("cy", y2);
+    actualizarPuente(a);
+  }
+
+  // Hasta dónde puede moverse cada borde sin pisar a las vecinas
+  function limites(a) {
+    const otras = actividades.filter(o => o !== a);
+    const minIni = Math.max(0, ...otras.filter(o => o.fin <= a.inicio + 1e-9).map(o => o.fin));
+    const maxFin = Math.min(12, ...otras.filter(o => o.inicio >= a.fin - 1e-9).map(o => o.inicio));
+    return { minIni, maxFin };
+  }
+
+  // Posición del puntero → hora (0–12)
+  function horaDe(e) {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    let ang = Math.atan2(q.x - CX, -(q.y - CY));
+    if (ang < 0) ang += 2 * Math.PI;
+    return ang / (2 * Math.PI) * 12;
+  }
+
+  // Arrastrar un asa: lado = "inicio" o "fin"
+  function activarAsa(a, asa, lado) {
+    let ultima = 0, bruto = 0;
+    asa.addEventListener("pointerdown", e => {
+      e.stopPropagation();
+      asa.setPointerCapture(e.pointerId);
+      ultima = horaDe(e);
+      bruto = a[lado];
+    });
+    asa.addEventListener("pointermove", e => {
+      if (!asa.hasPointerCapture(e.pointerId)) return;
+      let d = horaDe(e) - ultima;
+      if (d > 6) d -= 12; if (d < -6) d += 12;   // evita saltos al cruzar las 12
+      ultima = horaDe(e);
+      const { minIni, maxFin } = limites(a);
+      if (lado === "fin") {
+        bruto = limitar(bruto + d, a.inicio + MINIMO, maxFin);
+        a.fin = limitar(Math.round(bruto / PASO) * PASO, a.inicio + MINIMO, maxFin);
+      } else {
+        bruto = limitar(bruto + d, minIni, a.fin - MINIMO);
+        a.inicio = limitar(Math.round(bruto / PASO) * PASO, minIni, a.fin - MINIMO);
+      }
+      dibujar(a);
+      mostrarDetalle(a);
+    });
+    asa.addEventListener("click", e => e.stopPropagation());
+    asa.addEventListener("pointerup", () => guardar());
+  }
+
+  function soltar() {
+    if (seleccionado) seleccionado.g.classList.remove("activo", "editando");
+    seleccionado = null; editando = null;
+    mostrarDetalle(null);
+  }
+
+  // ---- Crear las porciones ----
+  function crearPorcion(a) {
+    a.g = el("g", { class: "sector", tabindex: 0, role: "button", "aria-label": a.nombre }, capa);
+    a.path = el("path", { fill: a.color }, a.g);
+    a.icon = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-size": 26, "pointer-events": "none" }, a.g);
+    a.icon.textContent = a.icono;
+    a.asaIni = el("circle", { r: 9, class: "asa" }, a.g);
+    a.asaFin = el("circle", { r: 9, class: "asa" }, a.g);
+    activarAsa(a, a.asaIni, "inicio");
+    activarAsa(a, a.asaFin, "fin");
+    // Botones de Bitorta: (+) crear, (>)/(<) viajar a la otra torta
+    a.mas = el("g", { class: "mas" }, a.g);
+    el("circle", { r: 12 }, a.mas);
+    el("text", {}, a.mas).textContent = "+";
+    a.puente = el("g", { class: "puente" }, a.g);
+    el("circle", { r: 12 }, a.puente);
+    a.puenteTxt = el("text", {}, a.puente);
+    a.menos = el("g", { class: "menos" }, a.g);
+    el("circle", { r: 12 }, a.menos);
+    el("text", {}, a.menos).textContent = "−";
+    a.menos.addEventListener("click", e => { e.stopPropagation(); desenlazar(a); });
+    ["dblclick", "pointerdown"].forEach(t => {
+      a.menos.addEventListener(t, e => e.stopPropagation());
+      a.mas.addEventListener(t, e => e.stopPropagation());
+      a.puente.addEventListener(t, e => e.stopPropagation());
+    });
+    a.mas.addEventListener("click", e => { e.stopPropagation(); hacerBitorta(a); });
+    a.puente.addEventListener("click", e => { e.stopPropagation(); cambiarPeriodo(a.id); });
+    dibujar(a);
+
+    a.g.addEventListener("pointerenter", () => { alFrente(a); if (!seleccionado) mostrarDetalle(a); });
+    a.g.addEventListener("pointerleave", () => { if (!seleccionado) mostrarDetalle(null); });
+    a.g.addEventListener("focus", () => alFrente(a));
+
+    // Un clic la deja seleccionada; otro clic la suelta
+    a.g.addEventListener("click", e => {
+      e.stopPropagation();
+      if (zoomA) return;
+      const ya = seleccionado === a;
+      soltar();
+      if (!ya) { seleccionado = a; a.g.classList.add("activo"); alFrente(a); mostrarDetalle(a); }
+    });
+    // Doble clic: modo edición (aparecen los puntos para deslizar)
+    a.g.addEventListener("dblclick", e => {
+      if (zoomA) return;                                       // con zoom, el doble clic lo atiende el documento (sale del zoom)
+      e.stopPropagation();
+      if (document.body.classList.contains("mod-on")) { entrarZoom(a); return; }   // en MOD: zoom a la pared exterior
+      soltar();
+      seleccionado = editando = a;
+      a.g.classList.add("activo", "editando");
+      alFrente(a); mostrarDetalle(a);
+    });
+    a.g.addEventListener("keydown", e => {
+      if (e.key === "Enter") a.g.dispatchEvent(new Event("click", { bubbles: true }));
+      if (e.key === "Escape") soltar();
+    });
+  }
+  actividades.forEach(crearPorcion);
+
+  svg.addEventListener("click", () => { if (!zoomA) soltar(); });   // tocar el fondo suelta todo
+
+  // Doble clic en una zona libre: crea una actividad ahí (luego se ajusta arrastrando)
+  const COLORES = {
+    AM: ["#FFE29A", "#FFC58F", "#FFA9B8", "#FFD36E", "#F9B8D6", "#FFD2A8"],
+    PM: ["#E8833A", "#C65D3B", "#F2A65A", "#E0566B", "#7A4B7C", "#B8452F"],
+  };
+  const colorNuevo = () => { const c = COLORES[periodo]; return c[actividades.length % c.length]; };
+  fondo.addEventListener("dblclick", e => {
+    if (zoomA) return;
+    const h = horaDe(e);
+    if (actividades.some(o => o.inicio <= h && h < o.fin)) return;
+    crearActividadEn(h);
+  });
+
+  // Espacio libre (15 min como mínimo) donde cabe una actividad alrededor de la hora h
+  function espacioEn(h) {
+    if (actividades.some(o => o.inicio <= h && h < o.fin)) return null;
+    const previo = Math.max(0, ...actividades.filter(o => o.fin <= h).map(o => o.fin));
+    const siguiente = Math.min(12, ...actividades.filter(o => o.inicio > h).map(o => o.inicio));
+    const ini = Math.max(previo, Math.min(Math.floor(h * 4) / 4, siguiente - MINIMO));
+    const fin = Math.min(ini + 1, siguiente);
+    return fin - ini < MINIMO - 1e-9 ? null : { ini, fin };
+  }
+  // ¿Queda algún hueco libre en esta torta?
+  function hayEspacio() {
+    let cursor = 0;
+    for (const o of [...actividades].sort((x, y) => x.inicio - y.inicio)) {
+      if (o.inicio - cursor >= MINIMO - 1e-9) return true;
+      cursor = Math.max(cursor, o.fin);
+    }
+    return 12 - cursor >= MINIMO - 1e-9;
+  }
+  function temblar() {
+    svg.classList.remove("tiembla");
+    void svg.getBoundingClientRect();           // reinicia la animación
+    svg.classList.add("tiembla");
+    setTimeout(() => svg.classList.remove("tiembla"), 1000);
+  }
+  // Menú para escribir el nombre (y el emoji, si se pasa "icono"); devuelve { nombre, icono } o null si se cancela
+  const EMOJIS = ["⭐", "😴", "🍳", "🏃", "📚", "🧘", "💻", "🍽️", "🎮", "🥘", "🌙", "🚿", "🎵", "🧹", "🛒", "🚌"];
+  function primerEmoji(v) {
+    v = v.trim();
+    if (!v) return "";
+    if (window.Intl && Intl.Segmenter) for (const g of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(v)) return g.segment;
+    return Array.from(v)[0];
+  }
+  function pedirActividad({ titulo, nombre = "", icono = null, color = null, resumen = null, boton = "Crear" }) {
+    return new Promise(res => {
+      const dlg = document.getElementById("dialogo"), inp = document.getElementById("dNombre");
+      const ok = document.getElementById("dOk"), no = document.getElementById("dNo");
+      const caja = document.getElementById("dIconoBox"), ic = document.getElementById("dIcono"), lista = document.getElementById("dEmojis");
+      document.getElementById("dTitulo").textContent = titulo;
+      document.getElementById("dTexto").hidden = true;
+      inp.hidden = false; ok.textContent = boton; ok.classList.remove("peligro");
+      document.getElementById("dNombreT").hidden = icono === null;
+      const cajaR = document.getElementById("dResumenBox"), rs = document.getElementById("dResumen");
+      cajaR.hidden = resumen === null;
+      if (resumen !== null) rs.value = resumen;
+      caja.hidden = icono === null;
+      lista.replaceChildren();
+      // Color: paleta de las dos tortas + selector libre
+      const cajaC = document.getElementById("dColorBox"), listaC = document.getElementById("dColores");
+      let elegido = color;
+      cajaC.hidden = color === null;
+      listaC.replaceChildren();
+      if (color !== null) {
+        const libre = document.createElement("input");
+        libre.type = "color"; libre.title = "Color personalizado";
+        libre.value = /^#[0-9a-f]{6}$/i.test(color) ? color : "#ffffff";
+        const marcar = () => listaC.querySelectorAll(".sw").forEach(b => b.classList.toggle("sel", b.dataset.c.toLowerCase() === elegido.toLowerCase()));
+        [...new Set([color, ...COLORES.AM, ...COLORES.PM])].forEach(c => {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "sw"; b.dataset.c = c; b.style.background = c; b.title = c;
+          b.addEventListener("click", () => { elegido = c; if (/^#[0-9a-f]{6}$/i.test(c)) libre.value = c; marcar(); });
+          listaC.appendChild(b);
+        });
+        libre.addEventListener("input", () => { elegido = libre.value; marcar(); });
+        listaC.appendChild(libre);
+        marcar();
+      }
+      if (icono !== null) {
+        ic.value = icono;
+        EMOJIS.forEach(em => {
+          const b = document.createElement("button"); b.type = "button"; b.textContent = em;
+          b.addEventListener("click", () => { ic.value = em; });
+          lista.appendChild(b);
+        });
+      }
+      const fin = v => { dlg.hidden = true; ok.onclick = no.onclick = inp.onkeydown = ic.onkeydown = rs.onkeydown = null; res(v); };
+      const aceptar = () => fin({
+        nombre: inp.value.trim() || nombre || "Nueva actividad",
+        icono: icono === null ? null : (primerEmoji(ic.value) || icono),
+        color: color === null ? null : elegido,
+        resumen: resumen === null ? null : rs.value.trim(),
+      });
+      const teclas = e => { if (e.key === "Enter") aceptar(); if (e.key === "Escape") fin(null); };
+      inp.value = nombre; dlg.hidden = false; inp.focus(); inp.select();
+      ok.onclick = aceptar;
+      no.onclick = () => fin(null);
+      inp.onkeydown = ic.onkeydown = rs.onkeydown = teclas;
+    });
+  }
+  // Menú de confirmación (sí / no); devuelve true o false
+  function pedirConfirmacion({ titulo, texto, boton }) {
+    return new Promise(res => {
+      const dlg = document.getElementById("dialogo"), inp = document.getElementById("dNombre");
+      const ok = document.getElementById("dOk"), no = document.getElementById("dNo");
+      const txt = document.getElementById("dTexto");
+      document.getElementById("dTitulo").textContent = titulo;
+      txt.textContent = texto; txt.hidden = false;
+      inp.hidden = true; document.getElementById("dIconoBox").hidden = true; document.getElementById("dColorBox").hidden = true;
+      document.getElementById("dResumenBox").hidden = true; document.getElementById("dNombreT").hidden = true;
+      ok.textContent = boton; ok.classList.add("peligro");
+      const fin = v => { dlg.hidden = true; ok.onclick = no.onclick = dlg.onkeydown = null; res(v); };
+      ok.onclick = () => fin(true);
+      no.onclick = () => fin(false);
+      dlg.onkeydown = e => { if (e.key === "Escape") fin(false); };
+      dlg.hidden = false; no.focus();                            // el foco queda en "Cancelar": es la opción segura
+    });
+  }
+  // Elimina las actividades de la torta actual; las Bitorta se conservan y la otra torta no se toca
+  async function borrarTodas() {
+    const quitar = actividades.filter(a => !parDe(a));
+    const quedan = actividades.length - quitar.length;
+    if (!quitar.length) { aviso("No hay actividades para eliminar en la torta " + periodo + "."); return; }
+    const cuales = quitar.length === 1 ? "la actividad" : "las " + quitar.length + " actividades";
+    const bi = !quedan ? "" : quedan === 1 ? " La actividad Bitorta se conserva." : " Las " + quedan + " actividades Bitorta se conservan.";
+    const si = await pedirConfirmacion({
+      titulo: "Eliminar actividades",
+      texto: "¿Eliminar " + cuales + " de la torta " + periodo + "?" + bi + " Esta acción no se puede deshacer.",
+      boton: "Eliminar",
+    });
+    if (!si) return;
+    quitar.forEach(a => { a.g.remove(); actividades.splice(actividades.indexOf(a), 1); });
+    soltar();
+    guardar();
+  }
+  async function pedirNombre() {
+    const r = await pedirActividad({ titulo: "Nueva actividad" });
+    return r ? r.nombre : null;
+  }
+  async function crearActividadEn(h) {
+    const hueco = espacioEn(h);
+    if (!hueco) { temblar(); return; }
+    const nombre = await pedirNombre();
+    if (nombre === null) return;
+    const a = { nombre, inicio: hueco.ini, fin: hueco.fin, color: colorNuevo(), icono: "⭐", id: nuevoId() };
+    actividades.push(a);
+    crearPorcion(a);
+    guardar();
+    soltar();
+    seleccionado = editando = a;
+    a.g.classList.add("activo", "editando");
+    alFrente(a); mostrarDetalle(a);
+  }
+
+  // Supr / Borrar: elimina la actividad que estás editando
+  // ---- Actividades Bitorta (presentes en las dos tortas) ----
+  function otraTorta() { return periodo === "AM" ? "PM" : "AM"; }
+  // ¿Toca la hora 12 de esta torta? "fin" (termina en las 12) o "ini" (empieza en las 12)
+  function ladoDoce(a) { return a.fin >= 12 - 1e-9 ? "fin" : a.inicio <= 1e-9 ? "ini" : null; }
+  function parDe(a) { return datos[otraTorta()].find(o => o.id === a.id); }
+  function aviso(t) { detalle.innerHTML = `<div class="ayuda">${t}</div>`; }
+
+  function enlaceTxt(a) {
+    const lado = ladoDoce(a);
+    if (!lado || !parDe(a)) return "";
+    return `<div class="hora">${lado === "fin" ? "↪ Continúa en la torta " : "↩ Viene de la torta "}${otraTorta()}</div>`;
+  }
+
+  // Muestra/oculta los botones y fija el borde de las 12 cuando la actividad es Bitorta
+  function actualizarPuente(a) {
+    if (!a.mas) return;
+    const lado = ladoDoce(a), par = lado ? parDe(a) : null;
+    a.g.classList.toggle("bi", !!par);
+    a.g.classList.toggle("puede-bi", !!lado && !par);
+    a.asaFin.style.display = (par && lado === "fin") ? "none" : "";
+    a.asaIni.style.display = (par && lado === "ini") ? "none" : "";
+    if (!lado) return;
+    const d = 17, x = lado === "fin" ? CX - d : CX + d, y = CY - Math.sqrt(118 * 118 - d * d);
+    a.mas.setAttribute("transform", `translate(${x} ${y})`);
+    a.puente.setAttribute("transform", `translate(${x} ${y})`);
+    a.menos.setAttribute("transform", `translate(${x} ${y + 30})`);
+    a.puenteTxt.textContent = lado === "fin" ? ">" : "<";
+  }
+
+  function hacerBitorta(a) {
+    const lado = ladoDoce(a);
+    if (!lado || parDe(a)) return;
+    const otra = otraTorta(), lista = datos[otra];
+    let ini, fin;
+    if (lado === "fin") {                       // sigue al inicio de la otra torta
+      const libre = Math.min(12, ...lista.map(o => o.inicio));
+      if (libre < MINIMO - 1e-9) return aviso("No hay espacio libre al inicio de la torta " + otra + ".");
+      ini = 0; fin = Math.min(1, libre);
+    } else {                                    // viene del final de la otra torta
+      const libre = 12 - Math.max(0, ...lista.map(o => o.fin));
+      if (libre < MINIMO - 1e-9) return aviso("No hay espacio libre al final de la torta " + otra + ".");
+      fin = 12; ini = 12 - Math.min(1, libre);
+    }
+    lista.push({ id: a.id, nombre: a.nombre, inicio: ini, fin, color: a.color, icono: a.icono, resumen: a.resumen || "" });
+    actualizarPuente(a); mostrarDetalle(a); guardar();
+  }
+
+  function desenlazar(a) {                      // quita la propiedad Bitorta
+    if (!parDe(a)) return;
+    a.id = nuevoId();                           // esta parte pasa a ser una actividad normal; la otra conserva la suya
+    actualizarPuente(a); guardar();
+    if (seleccionado === a) mostrarDetalle(a);
+  }
+
+  function eliminar(a) {                        // si es Bitorta, se borra de las dos tortas
+    if (seleccionado === a) soltar();
+    const lista = datos[otraTorta()], j = lista.findIndex(o => o.id === a.id);
+    if (j >= 0) { if (lista[j].g) lista[j].g.remove(); lista.splice(j, 1); }
+    a.g.remove();
+    actividades.splice(actividades.indexOf(a), 1);
+    guardar();
+  }
+  document.addEventListener("keydown", e => {
+    if (e.target.matches("input, textarea")) return;     // no borrar mientras escribes
+    if (editando && (e.key === "Delete" || e.key === "Backspace")) eliminar(editando);
+  });
+
+  // ---- Modo MOD: cambiar nombres, eliminar y añadir con su periodo ----
+  const btnMod = document.getElementById("btnMod");
+
+  btnMod.addEventListener("click", () => {
+    if (zoomA) salirZoom();
+    const abrir = !document.body.classList.contains("mod-on");
+    btnMod.classList.toggle("on", abrir);
+    document.body.classList.toggle("mod-on", abrir);
+    btnMod.setAttribute("aria-pressed", abrir);
+  });
+
+  // ---- Marcas y números de las horas ----
+  for (let h = 0; h < 12; h++) {
+    const [a, b] = punto(h, R), [c, d] = punto(h, R + 8);
+    const linea = el("line", { class: "marca", x1: a, y1: b, x2: c, y2: d, stroke: TINTA, "stroke-width": 3, "stroke-linecap": "round", "pointer-events": "none" });
+    const [tx, ty] = punto(h, R + 30);
+    const n = el("text", { class: "marca", x: tx, y: ty, "text-anchor": "middle", "dominant-baseline": "central",
+      "font-size": 17, "font-weight": 700, fill: TINTA, "pointer-events": "none" });
+    n.textContent = h === 0 ? 12 : h;
+    const ang = (h / 12) * 2 * Math.PI;                 // dirección radial de esta hora
+    [linea, n].forEach(m => {
+      m.style.setProperty("--ux", Math.sin(ang).toFixed(4));
+      m.style.setProperty("--uy", (-Math.cos(ang)).toFixed(4));
+    });
+  }
+
+  // Manecilla de la hora actual (solo en la torta que corresponde)
+  const manoG = el("g", {});
+  function dibujarMano() {
+    manoG.replaceChildren();
+    const ahora = new Date();
+    if (periodo === "PM") return;   // la torta PM no lleva manecilla
+    if ((ahora.getHours() < 12) !== (periodo === "AM")) return;
+    const h = ahora.getHours() % 12 + ahora.getMinutes() / 60;
+    const [mx, my] = punto(h, R - 5);
+    el("line", { x1: CX, y1: CY, x2: mx, y2: my, stroke: TINTA, "stroke-width": 4, "stroke-linecap": "round", "pointer-events": "none" }, manoG);
+  }
+  dibujarMano();
+  const gc = el("g", { class: "gc" });
+  el("circle", { class: "centro", cx: CX, cy: CY, r: 8, fill: TINTA }, gc);
+  const signo = el("g", { class: "signo-centro" }, gc);
+  el("line", { x1: CX - 8, y1: CY, x2: CX + 8, y2: CY, stroke: "var(--lienzo)", "stroke-width": 3.5, "stroke-linecap": "round" }, signo);
+  el("line", { x1: CX, y1: CY - 8, x2: CX, y2: CY + 8, stroke: "var(--lienzo)", "stroke-width": 3.5, "stroke-linecap": "round" }, signo);
+  // Flecha (aparece en lugar del + mientras mantienes el doble clic) y apunta hacia el mouse
+  const flechaRot = el("g", {}, el("g", { class: "flecha-centro" }, gc));
+  el("path", { d: `M ${CX} ${CY + 8} L ${CX} ${CY - 9} M ${CX - 6} ${CY - 3} L ${CX} ${CY - 9} L ${CX + 6} ${CY - 3}`,
+    fill: "none", stroke: "var(--lienzo)", "stroke-width": 3.5, "stroke-linecap": "round", "stroke-linejoin": "round" }, flechaRot);
+  // X que aparece al pasar el mouse por el centro cuando MOD está desactivado
+  const xG = el("g", { class: "x-centro" }, gc);
+  el("line", { x1: CX - 6, y1: CY - 6, x2: CX + 6, y2: CY + 6, stroke: "var(--lienzo)", "stroke-width": 3.5, "stroke-linecap": "round" }, xG);
+  el("line", { x1: CX - 6, y1: CY + 6, x2: CX + 6, y2: CY - 6, stroke: "var(--lienzo)", "stroke-width": 3.5, "stroke-linecap": "round" }, xG);
+
+  function posSvg(e) {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  let apuntando = false, ultimoToque = 0;
+
+  gc.addEventListener("pointerdown", e => {
+    if (!document.body.classList.contains("mod-on") || zoomA) return;
+    e.stopPropagation();
+    if (!hayEspacio()) { temblar(); ultimoToque = 0; return; }   // no cabe nada más: la torta tiembla
+    const t = performance.now();
+    if (t - ultimoToque < 350) {                                   // segundo toque, sostenido: la flecha apunta
+      ultimoToque = 0; apuntando = true;
+      soltar();
+      gc.setPointerCapture(e.pointerId);
+      document.body.classList.add("apuntando");
+      apuntar(e);
+    } else ultimoToque = t;
+  });
+  gc.addEventListener("pointermove", e => { if (apuntando) apuntar(e); });
+  const terminar = e => {
+    if (!apuntando) return;
+    apuntando = false;
+    document.body.classList.remove("apuntando");               // la flecha vuelve a ser un +
+    if (e.type !== "pointerup") return;
+    const q = posSvg(e), r = Math.hypot(q.x - CX, q.y - CY);
+    if (r > R * 1.0857 + 2 || r < 22) return;                  // fuera de la torta o sobre el centro
+    const h = horaDe(e);
+    if (actividades.some(o => o.inicio <= h && h < o.fin)) return;   // sobre una actividad
+    crearActividadEn(h);
+  };
+  gc.addEventListener("pointerup", terminar);
+  gc.addEventListener("pointercancel", terminar);
+  gc.addEventListener("dblclick", e => {                         // sin MOD: doble clic en la X abre el menú de borrado
+    if (document.body.classList.contains("mod-on") || zoomA) return;
+    e.stopPropagation();
+    borrarTodas();
+  });
+  function apuntar(e) {                                         // gira la flecha hacia el mouse (no se mueve)
+    const q = posSvg(e);
+    const grados = Math.atan2(q.x - CX, -(q.y - CY)) * 180 / Math.PI;
+    flechaRot.setAttribute("transform", `rotate(${grados.toFixed(1)} ${CX} ${CY})`);
+  }
+
+  // ---- Letrero: actividad actual y siguiente (mira las dos tortas: AM = 0–12 h, PM = 12–24 h) ----
+  function calcularLetrero(datos, t) {
+    const L = [];
+    for (const dia of [0, 24]) for (const [per, off] of [["AM", 0], ["PM", 12]])
+      for (const a of datos[per]) L.push({ a, per, ini: dia + off + a.inicio, fin: dia + off + a.fin });
+    const actual = L.find(x => x.ini <= t && t < x.fin);
+    if (!actual) {                                               // tiempo libre
+      const sig = L.filter(x => x.ini > t).sort((p, q) => p.ini - q.ini)[0];
+      return { actual: null, sig: sig ? sig.a : null, falta: sig ? sig.ini - t : 0 };
+    }
+    let cur = actual;                                            // una Bitorta sigue en la otra torta: se cuenta hasta su final real
+    for (let i = 0; i < 4; i++) {
+      const sigParte = L.find(x => x !== cur && x.a.id === cur.a.id && Math.abs(x.ini - cur.fin) < 1e-9);
+      if (!sigParte) break;
+      cur = sigParte;
+    }
+    const sig = L.filter(x => x.ini >= cur.fin - 1e-9 && x.a.id !== actual.a.id).sort((p, q) => p.ini - q.ini)[0];
+    return { actual: actual.a, sig: sig ? sig.a : null, falta: cur.fin - t };
+  }
+  function fmtFalta(horas) {
+    const m = Math.max(1, Math.ceil(horas * 60 - 1e-6)), h = Math.floor(m / 60), r = m % 60;
+    return h ? h + " h" + (r ? " " + r + " min" : "") : r + " min";
+  }
+  function actualizarLetrero() {
+    const l1 = document.querySelector("#letrero .l1"), l2 = document.querySelector("#letrero .l2");
+    if (!l1 || !l2) return;
+    const ahora = new Date();
+    const t = ahora.getHours() + ahora.getMinutes() / 60 + ahora.getSeconds() / 3600;
+    const r = calcularLetrero(datos, t);
+    const poner = (div, partes) => {
+      div.replaceChildren();
+      partes.forEach(x => {
+        if (typeof x === "string") div.append(x);
+        else { const b = document.createElement("b"); b.textContent = x.b; div.append(b); }
+      });
+    };
+    const nom = a => ({ b: a.icono + " " + a.nombre });
+    if (r.actual) {
+      poner(l1, ["En ", { b: fmtFalta(r.falta) }, " la actividad ", nom(r.actual), " se acaba"]);
+      poner(l2, r.sig ? ["La siguiente actividad será ", nom(r.sig)] : ["No hay más actividades después de esta"]);
+    } else if (r.sig) {
+      poner(l1, ["Ahora no hay ninguna actividad"]);
+      poner(l2, ["En ", { b: fmtFalta(r.falta) }, " empieza ", nom(r.sig)]);
+    } else {
+      poner(l1, ["Aún no hay actividades en tu rutina"]);
+      l2.replaceChildren();
+    }
+  }
+  actualizarLetrero();
+  setInterval(actualizarLetrero, 15000);
+
+  // ---- Zoom (cámara) a la pared exterior de una actividad, solo en modo MOD ----
+  const VB0 = { x: 0, y: 0, w: 400, h: 400 };
+  let vb = { ...VB0 }, animId = 0;
+  let zoomA = null, zbtns = null;
+
+  function animarVB(dest, ms = 650) {
+    const ini = { ...vb }, t0 = performance.now(), id = ++animId;
+    const poner = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+    if (ms === 0) { vb = { ...dest }; poner(); return; }
+    const paso = t => {
+      if (id !== animId) return;                                // otra animación tomó el control
+      const k = Math.min(1, (t - t0) / ms), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      vb = { x: ini.x + (dest.x - ini.x) * e, y: ini.y + (dest.y - ini.y) * e, w: ini.w + (dest.w - ini.w) * e, h: ini.h + (dest.h - ini.h) * e };
+      poner();
+      if (k < 1) requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+  }
+
+  function entrarZoom(a) {
+    soltar();
+    seleccionado = a; a.g.classList.add("activo"); alFrente(a); mostrarDetalle(a);
+    zoomA = a;
+    const sep = parseFloat(getComputedStyle(document.body).getPropertyValue("--sep")) || 0;
+    const ang = ((a.inicio + a.fin) / 24) * 2 * Math.PI;
+    const ux = Math.sin(ang), uy = -Math.cos(ang);              // hacia afuera, por la mitad de la actividad
+    const tx = Math.cos(ang), ty = Math.sin(ang);               // a lo largo de la pared
+    const rPared = R * 1.07 + sep;                              // pared exterior (porción agrandada y separada)
+    const cuerda = 2 * R * Math.sin(Math.min(Math.PI / 2, (a.fin - a.inicio) / 12 * Math.PI));
+    const w = limitar(cuerda * 1.2 + 70, 130, 300);
+    const cx = CX + ux * (rPared + 10), cy = CY + uy * (rPared + 10);
+
+    // Dos botones justo encima de la pared (por fuera): izquierda = editar, derecha = eliminar
+    const bx = CX + ux * (rPared + 26), by = CY + uy * (rPared + 26);
+    let pos = [[bx - tx * 20, by - ty * 20], [bx + tx * 20, by + ty * 20]];
+    if (pos[0][0] > pos[1][0]) pos.reverse();
+    zbtns = el("g", { class: "zbtns" });
+    [["✏️", "", () => editarActividad(a)], ["🗑️", " peligro", () => { salirZoom(); eliminar(a); }]].forEach(([emoji, extra, accion], i) => {
+      const b = el("g", { class: "btn-zoom" + extra, transform: `translate(${pos[i][0]} ${pos[i][1]})` }, zbtns);
+      const pop = el("g", { class: "pop" }, b);
+      el("circle", { r: 16 }, pop);
+      el("text", {}, pop).textContent = emoji;
+      ["pointerdown", "dblclick"].forEach(t => b.addEventListener(t, e => e.stopPropagation()));
+      b.addEventListener("click", e => { e.stopPropagation(); accion(); });
+    });
+    document.body.classList.add("zoom");
+    animarVB({ x: cx - w / 2, y: cy - w / 2, w, h: w });
+  }
+
+  function salirZoom(instante) {
+    if (!zoomA) return;
+    zoomA = null;
+    document.body.classList.remove("zoom");
+    if (zbtns) { zbtns.remove(); zbtns = null; }
+    animarVB(VB0, instante ? 0 : 650);
+    soltar();
+  }
+
+  // Doble clic en cualquier parte (menos los dos botones) vuelve la cámara a la normalidad
+  document.addEventListener("dblclick", e => {
+    if (!zoomA) return;
+    if (e.target.closest && e.target.closest(".btn-zoom, #dialogo")) return;
+    salirZoom();
+  });
+
+  async function editarActividad(a) {
+    const r = await pedirActividad({ titulo: "Editar actividad", nombre: a.nombre, icono: a.icono, color: a.color, resumen: a.resumen || "", boton: "Guardar" });
+    if (!r) return;
+    a.nombre = r.nombre; a.icono = r.icono; a.color = r.color; a.resumen = r.resumen;
+    a.path.setAttribute("fill", a.color);
+    a.icon.textContent = a.icono;
+    a.g.setAttribute("aria-label", a.nombre);
+    const par = datos[otraTorta()].find(o => o.id === a.id);     // en Bitorta se actualizan las dos partes
+    if (par) { par.nombre = a.nombre; par.icono = a.icono; par.color = a.color; par.resumen = a.resumen; }
+    guardar();
+    if (seleccionado === a) mostrarDetalle(a);
+  }
+
+  mostrarDetalle(null);
+
+  // Uso sin internet: registra el service worker (solo funciona con la página publicada en https)
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+
+  // ---- Cambiar entre la torta AM y la PM ----
+  const flecha = document.getElementById("flecha");
+  let cambiando = false;
+
+  function cambiarPeriodo(idSel) {
+    if (cambiando) return;
+    cambiando = true;
+    if (zoomA) salirZoom(true);
+    document.body.dataset.tema = periodo === "AM" ? "PM" : "AM";   // cambia la paleta
+    svg.style.opacity = 0;
+    setTimeout(() => {
+      soltar();
+      periodo = periodo === "AM" ? "PM" : "AM";
+      actividades = datos[periodo];
+      capa.replaceChildren();
+      actividades.forEach(crearPorcion);
+      document.getElementById("sub").textContent = "Torta " + periodo;
+      svg.setAttribute("aria-label", "Reloj de actividades " + periodo);
+      flecha.textContent = periodo === "AM" ? ">" : "<";
+      flecha.setAttribute("aria-label", periodo === "AM" ? "Ir a la torta PM" : "Volver a la torta AM");
+      dibujarMano();
+      if (typeof idSel === "string") {          // viene de un botón (>) / (<): deja seleccionada la otra parte
+        const b = actividades.find(o => o.id === idSel);
+        if (b) { seleccionado = b; b.g.classList.add("activo"); alFrente(b); mostrarDetalle(b); }
+      }
+      svg.style.opacity = 1;
+      cambiando = false;
+    }, 180);
+  }
+  flecha.addEventListener("click", () => cambiarPeriodo());
+
+  // La flecha aparece poco a poco al acercar el mouse al borde izquierdo
+  const ZONA = 220;   // píxeles desde el borde donde empieza a notarse
+  document.addEventListener("mousemove", e => {
+    const o = Math.max(0, Math.min(1, 1 - e.clientX / ZONA));
+    flecha.style.opacity = o;
+    flecha.style.pointerEvents = o > 0.05 ? "auto" : "none";
+  });
+  document.addEventListener("mouseleave", () => { flecha.style.opacity = 0; flecha.style.pointerEvents = "none"; });
+</script>
+</body>
+</html>
